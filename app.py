@@ -71,7 +71,7 @@ def extract_blue_text_from_pdf(file_object):
     return blue_texts
 
 
-st.title("📄 Google Scholar Publication Similarity Checker")
+st.title(" Google Scholar Publication Similarity Checker")
 
 uploaded_files = st.file_uploader(
     "Upload Google Scholar PDFs of researchers",
@@ -91,7 +91,7 @@ if uploaded_files:
             st.warning(f"Skipping {file.name}: Not detected as a Google Scholar PDF.")
 
     if len(researcher_data) > 1:
-        st.subheader("📊 Publication Similarities Between Researchers")
+        st.subheader(" Publication Similarities Between Researchers")
 
         all_sets = {name: set(titles) for name, titles in researcher_data.items()}
         comparisons = []
@@ -99,17 +99,17 @@ if uploaded_files:
         for (file1, file2) in combinations(all_sets.keys(), 2):
             common_titles = all_sets[file1].intersection(all_sets[file2])
             comparisons.append({
-                "📂 Files Compared": f"{file1} ↔ {file2}",
-                "🔢 Common Publications": len(common_titles),
-                "📜 Titles": "\n".join([f"- {title}" for title in sorted(common_titles)]) if common_titles else "None"
+                "Files Compared": f"{file1} ↔ {file2}",
+                "Common Publications": len(common_titles),
+                "Titles": "\n".join([f"- {title}" for title in sorted(common_titles)]) if common_titles else "None"
             })
 
         if len(all_sets) > 2:
             common_all = set.intersection(*all_sets.values())
             comparisons.append({
-                "📂 Files Compared": "All Researchers",
-                "🔢 Common Publications": len(common_all),
-                "📜 Titles": "\n".join([f"- {title}" for title in sorted(common_all)]) if common_all else "None"
+                "Files Compared": "All Researchers",
+                "Common Publications": len(common_all),
+                "Titles": "\n".join([f"- {title}" for title in sorted(common_all)]) if common_all else "None"
             })
 
         df_comparisons = pd.DataFrame(comparisons)
@@ -130,7 +130,7 @@ if uploaded_files:
 
         csv_data = convert_df(df_comparisons)
         st.download_button(
-            label="📥 Download Comparison as CSV",
+            label="Download Comparison as CSV",
             data=csv_data,
             file_name="publication_comparisons.csv",
             mime="text/csv"
