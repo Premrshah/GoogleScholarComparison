@@ -3,6 +3,11 @@ import fitz
 from io import BytesIO
 import pandas as pd
 from itertools import combinations
+import matplotlib.pyplot as plt
+import matplotlib_venn as venn
+from matplotlib_venn import venn3_circles
+
+
 
 def is_google_scholar(file_object):
     if file_object is None or file_object.getbuffer().nbytes == 0:
@@ -136,5 +141,39 @@ if uploaded_files:
             mime="text/csv"
         )
 
+    if len(all_sets) > 1:
+        fig, ax = plt.subplots(figsize=(6, 6))
+
+        researcher_names = list(all_sets.keys())
+        publication_sets = list(all_sets.values())
+
+        if len(publication_sets) == 2:
+            v = venn.venn2(
+                subsets=publication_sets,
+                set_labels=researcher_names
+            )
+        elif len(publication_sets) == 3:
+            v = venn.venn3(
+                subsets=publication_sets,
+                set_labels=researcher_names
+            )
+        else:
+            st.warning("⚠️ More than 3 researchers detected. Using an approximate visualization.")
+
+            fig, ax = plt.subplots(figsize=(8, 8))
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis("off")
+
+            colors = ["red", "blue", "green", "purple", "orange"]
+            num_sets = len(publication_sets)
+            for i, (name, pub_set) in enumerate(zip(researcher_names, publication_sets)):
+                circle = plt.Circle((0.5 + 0.2 * i, 0.5), 0.3, color=colors[i % len(colors)], alpha=0.3, label=f"{name} ({len(pub_set)})")
+                ax.add_patch(circle)
+
+            plt.legend()
+
     else:
         st.warning("Upload at least 2 valid Google Scholar PDFs to compare publications.")
+
+    st.pyplot(fig)
