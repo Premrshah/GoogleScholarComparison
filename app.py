@@ -1,13 +1,12 @@
 import streamlit as st
 import fitz  
+import re
 from io import BytesIO
 import pandas as pd
 from itertools import combinations
 import matplotlib.pyplot as plt
 import matplotlib_venn as venn
-from matplotlib_venn import venn3_circles
-
-
+from datetime import datetime
 
 def is_google_scholar(file_object):
     if file_object is None or file_object.getbuffer().nbytes == 0:
@@ -42,13 +41,13 @@ def is_blue(color_int):
     b = color_int & 0xFF
     return b > r and b > g
 
-def extract_blue_text_from_pdf(file_object):
-    blue_texts = set()
+def extract_blue_text_with_years(file_object):
+    blue_texts = {}
     current_title = ""
+    current_year = None
 
     if file_object is None or file_object.getbuffer().nbytes == 0:
-        file_name = getattr(file_object, "name", "Unknown file")
-        return set()
+        return {}
 
     file_object.seek(0)
     pdf_document = fitz.open(stream=file_object.read(), filetype="pdf")
@@ -56,27 +55,35 @@ def extract_blue_text_from_pdf(file_object):
     try:
         for page_number in range(len(pdf_document)):
             page = pdf_document.load_page(page_number)
-            for text_instance in page.get_text("dict")["blocks"]:
-                if "lines" in text_instance:
-                    for line in text_instance["lines"]:
+            blocks = page.get_text("dict")["blocks"]
+
+            for block in blocks:
+                if "lines" in block:
+                    for line in block["lines"]:
                         for span in line["spans"]:
                             if is_blue(span['color']):
                                 current_title += span['text'] + " "
                             else:
                                 if current_title.strip():
-                                    blue_texts.add(current_title.strip())
+                                    blue_texts[current_title.strip()] = None 
                                     current_title = ""
 
-        if current_title.strip():
-            blue_texts.add(current_title.strip())
+            text_lines = page.get_text("text").split("\n")
+            for line in text_lines:
+                year_match = re.search(r'\b(20\d{2}|19\d{2})\b', line.strip())  
+                if year_match:
+                    current_year = int(year_match.group(0))
+
+            title_list = list(blue_texts.keys())
+            for title in title_list:
+                if blue_texts[title] is None and current_year:
+                    blue_texts[title] = current_year
 
     finally:
         pdf_document.close()
 
-    return blue_texts
-
-
-st.title(" Google Scholar Publication Similarity Checker")
+    return blue_texts  
+st.title("Google Scholar Publication Similarity Checker")
 
 uploaded_files = st.file_uploader(
     "Upload Google Scholar PDFs of researchers",
@@ -86,23 +93,29 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     researcher_data = {}
+    current_year = datetime.now().year
+    min_year = current_year - 4  
 
     for file in uploaded_files:
         if is_google_scholar(file):
             researcher_name = file.name 
-            extracted_titles = extract_blue_text_from_pdf(file)
-            researcher_data[researcher_name] = extracted_titles
+            extracted_titles_with_years = extract_blue_text_with_years(file)
+
+            filtered_titles = {title for title, year in extracted_titles_with_years.items() if year and year >= min_year}
+
+            researcher_data[researcher_name] = filtered_titles
         else:
             st.warning(f"Skipping {file.name}: Not detected as a Google Scholar PDF.")
 
     if len(researcher_data) > 1:
-        st.subheader(" Publication Similarities Between Researchers")
+        st.subheader("Publication Similarities Between Researchers")
 
         all_sets = {name: set(titles) for name, titles in researcher_data.items()}
         comparisons = []
 
         for (file1, file2) in combinations(all_sets.keys(), 2):
-            common_titles = all_sets[file1].intersection(all_sets[file2])
+            common_titles = {t1 for t1 in all_sets[file1] for t2 in all_sets[file2] if t1.replace(" ", "") == t2.replace(" ", "")}
+
             comparisons.append({
                 "Files Compared": f"{file1} ↔ {file2}",
                 "Common Publications": len(common_titles),
@@ -110,7 +123,10 @@ if uploaded_files:
             })
 
         if len(all_sets) > 2:
-            common_all = set.intersection(*all_sets.values())
+            stripped_sets = [{title.replace(" ", ""): title for title in titles} for titles in all_sets.values()]
+            common_all_keys = set.intersection(*[set(s.keys()) for s in stripped_sets])
+            common_all = {s[key] for s in stripped_sets for key in common_all_keys}
+
             comparisons.append({
                 "Files Compared": "All Researchers",
                 "Common Publications": len(common_all),
@@ -127,7 +143,6 @@ if uploaded_files:
             height=(50 + len(df_comparisons) * 35),  
             width=800
         )
-
 
         @st.cache_data
         def convert_df(df):
@@ -148,12 +163,12 @@ if uploaded_files:
         publication_sets = list(all_sets.values())
 
         if len(publication_sets) == 2:
-            v = venn.venn2(
+            venn.venn2(
                 subsets=publication_sets,
                 set_labels=researcher_names
             )
         elif len(publication_sets) == 3:
-            v = venn.venn3(
+            venn.venn3(
                 subsets=publication_sets,
                 set_labels=researcher_names
             )
